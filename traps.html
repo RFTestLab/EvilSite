@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evil Autofill Traps</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <main class="container py-4">
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Evil Autofill Traps</h5>
+            <p class="muted-small mb-0">
+              Credential fields hidden or visually misrepresented inside an attacker-controlled frame.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <h6 class="card-title">Visible decoy + hidden credential form</h6>
+            <div class="mb-2">
+              <label for="hiddenMode" class="form-label">Hidden mode</label>
+              <select id="hiddenMode" class="form-select">
+                <option value="display">display:none</option>
+                <option value="opacity">opacity:0</option>
+                <option value="offscreen">offscreen</option>
+                <option value="clipped">clipped 1x1</option>
+                <option value="zero">0x0</option>
+                <option value="visible">visible control</option>
+              </select>
+            </div>
+
+            <form id="decoySearchForm" autocomplete="on" class="mb-3">
+              <label for="decoy-search" class="form-label">Visible search box</label>
+              <input id="decoy-search" name="search" autocomplete="off" class="form-control" placeholder="Search coupons">
+            </form>
+
+            <div id="hiddenTrapHost">
+              <form id="hiddenCredentialForm" autocomplete="on">
+                <input id="hidden-email" name="email" autocomplete="username" class="form-control mb-2" placeholder="hidden@example.com">
+                <input id="hidden-password" name="password" type="password" autocomplete="current-password" class="form-control" placeholder="Hidden password">
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <h6 class="card-title">Covered real inputs</h6>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+              <button id="togglePointerBtn" type="button" class="btn btn-sm btn-outline-secondary">Toggle overlay pointer-events</button>
+              <button id="toggleOpacityBtn" type="button" class="btn btn-sm btn-outline-secondary">Toggle overlay opacity</button>
+            </div>
+            <div class="test-zone covered-layer">
+              <form id="coveredCredentialForm" class="covered-real" autocomplete="on">
+                <input id="covered-email" name="email" autocomplete="username" class="form-control mb-2" placeholder="covered@example.com">
+                <input id="covered-password" name="password" type="password" autocomplete="current-password" class="form-control" placeholder="Covered password">
+              </form>
+              <div id="fakeOverlay" class="fake-overlay">
+                <strong>Fake coupon lookup</strong>
+                <p class="muted-small mb-2">Visible layer over real credential fields.</p>
+                <button type="button" class="btn btn-sm btn-dark">Find coupon</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body">
+            <h6 class="card-title">Local instrumentation log</h6>
+            <div id="localLog" class="local-log"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="assets/js/evil.js"></script>
+  <script>
+    (function () {
+      let overlayPointerEnabled = true;
+      let overlayDimmed = false;
+
+      function applyHiddenMode() {
+        const host = document.getElementById("hiddenTrapHost");
+        host.className = "";
+        host.style.cssText = "";
+        const mode = document.getElementById("hiddenMode").value;
+        if (mode === "display") host.style.display = "none";
+        else if (mode === "opacity") host.style.opacity = "0";
+        else if (mode === "offscreen") host.className = "offscreen-trap";
+        else if (mode === "clipped") host.className = "clipped-trap";
+        else if (mode === "zero") host.className = "zero-trap";
+        EvilSite.localLog("Hidden trap mode: " + mode, "TRAP");
+        EvilSite.snapshotAndReport("hidden-mode-" + mode);
+      }
+
+      EvilSite.init();
+      document.getElementById("hiddenMode").addEventListener("change", applyHiddenMode);
+      document.getElementById("togglePointerBtn").addEventListener("click", () => {
+        overlayPointerEnabled = !overlayPointerEnabled;
+        document.getElementById("fakeOverlay").style.pointerEvents = overlayPointerEnabled ? "auto" : "none";
+        EvilSite.localLog("Overlay pointer-events: " + document.getElementById("fakeOverlay").style.pointerEvents, "TRAP");
+        EvilSite.snapshotAndReport("overlay-pointer-toggle");
+      });
+      document.getElementById("toggleOpacityBtn").addEventListener("click", () => {
+        overlayDimmed = !overlayDimmed;
+        document.getElementById("fakeOverlay").style.opacity = overlayDimmed ? ".35" : "1";
+        EvilSite.localLog("Overlay opacity: " + document.getElementById("fakeOverlay").style.opacity, "TRAP");
+        EvilSite.snapshotAndReport("overlay-opacity-toggle");
+      });
+      setTimeout(applyHiddenMode, 0);
+    })();
+  </script>
+</body>
+</html>

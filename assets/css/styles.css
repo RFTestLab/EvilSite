@@ -1,0 +1,102 @@
+:root {
+  --evil-green: #078b33;
+  --evil-bg: #f7fbf7;
+  --evil-border: #dceee1;
+  --evil-log-bg: #0b1220;
+  --evil-log-text: #dbeafe;
+}
+
+body {
+  background: var(--evil-bg);
+}
+
+.card {
+  border-color: var(--evil-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .06);
+}
+
+.btn-evil {
+  background: var(--evil-green);
+  color: #fff;
+  border: 0;
+}
+
+.btn-evil:hover,
+.btn-evil:focus {
+  background: #056f29;
+  color: #fff;
+}
+
+.muted-small {
+  color: #6b7280;
+  font-size: .85rem;
+}
+
+.test-zone {
+  position: relative;
+  min-height: 190px;
+  padding: 12px;
+  border: 1px dashed #b8d8c3;
+  border-radius: 8px;
+  background: #fbfefc;
+}
+
+.offscreen-trap {
+  position: absolute;
+  left: -3000px;
+  width: 260px;
+}
+
+.clipped-trap {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.zero-trap {
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+}
+
+.covered-layer {
+  position: relative;
+  min-height: 170px;
+}
+
+.covered-real {
+  position: absolute;
+  inset: 48px 12px auto 12px;
+}
+
+.fake-overlay {
+  position: absolute;
+  inset: 36px 4px auto 4px;
+  z-index: 2;
+  padding: 14px;
+  border: 1px solid #d7e7dc;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .08);
+}
+
+.local-log {
+  min-height: 180px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--evil-log-bg);
+  color: var(--evil-log-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+}
+
+.log-line {
+  margin-bottom: 6px;
+}
